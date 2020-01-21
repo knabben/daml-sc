@@ -1,0 +1,58 @@
+-- Copyright (c) 2020 The DAML Authors. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+
+daml 1.2
+module Main where
+
+template Consignment
+  with
+    exporter: Party
+    importer: Party
+    weight: Int
+    commodity: Text
+  where
+    signatory exporter, importer
+
+    controller importer can
+      TradeExporter: ContractId TradeProposal
+        with newExporter: Party
+        do
+          create TradeProposal 
+            with 
+              consignment = this
+              newExporter
+
+-- Trade proposal between importer and exporter
+template TradeProposal
+  with
+    consignment: Consignment
+    newExporter: Party
+  where
+    signatory consignment.exporter, consignment.importer
+
+    controller newExporter can
+      AcceptTrade: ContractId Consignment
+        do
+          create consignment with exporter = newExporter
+
+test_consignment_trade = scenario do
+  exporter <- getParty "Shipper1"
+  importer <- getParty "Receiver1"
+
+ -- Importer starts the load
+  consignment <- submit importer do
+    create Consignment
+      with
+        exporter = importer
+        importer = importer
+        weight = 1000
+        commodity = "Wood"
+  
+  -- Importer being the trade request
+  trade <- submit importer do
+    exercise consignment TradeExporter
+      with newExporter = exporter
+
+  -- Exporter accepts the trade
+  submit exporter do
+    exercise trade AcceptTrade
